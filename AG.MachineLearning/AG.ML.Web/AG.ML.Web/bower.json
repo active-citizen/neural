@@ -1,0 +1,31 @@
+{
+  "name": "ag.ml",
+  "version": "1.0.0",
+  "dependencies": {
+    "angular": "1.5.7",
+    "angular-ui-router": "0.3.1",
+    "angular-resource": "1.5.7",
+    "bootstrap": "3.3.6"
+  },
+  "devDependencies": {},
+  "description": "Machine Learning Management",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "vendor",
+    "test",
+    "tests"
+  ],
+  "overrides":{
+    "bootstrap" : {
+      "main": [
+        "dist/css/bootstrap.css",
+        "dist/fonts/glyphicons-halflings-regular.eot",
+        "dist/fonts/glyphicons-halflings-regular.svg",
+        "dist/fonts/glyphicons-halflings-regular.ttf",
+        "dist/fonts/glyphicons-halflings-regular.woff"
+      ]
+    }
+  }
+}
