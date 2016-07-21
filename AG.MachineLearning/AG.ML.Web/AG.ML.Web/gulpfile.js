@@ -6,86 +6,123 @@ var gulp = require('gulp'),
     inject = require("gulp-inject"),
     uglify = require('gulp-uglify'),
     mainBowerFiles = require('main-bower-files'),
+    templateCache = require('gulp-angular-templatecache');
     concat = require('gulp-concat');
     order = require('gulp-order');
+    filter = require('gulp-filter');
     del = require('del');
 
 var env = process.env.NODE_ENV;
-
-// running 'bower install' command
-
-gulp.task('packages-install', function () {
-    return gulp.src(['./bower.json'])
-      .pipe(install());
-});
+var skipCleanup = false;
 
 // cleaning-up target and temp directories
 
-gulp.task('cleanup-build-results', function () {
-    return del.sync(['./build/**/*', './js/**/*', './css/**/*', './fonts/**/*']);
+gulp.task('cleanup', function () {
+    if (!skipCleanup) {
+        del.sync(['js/**/*', 'css/**/*', 'fonts/**/*']);
+    }
 });
 
-// copy main bower files to 'build' directory
+// installing bower dependencies
 
-gulp.task("copy-bower-files", ['packages-install', 'cleanup-build-results'], function () {
-    return gulp.src(mainBowerFiles(), { base: './vendor' })
-        .pipe(gulp.dest('./build/vendor'));
+gulp.task('install-bower-packages', function () {
+    return gulp.src(['bower.json'])
+      .pipe(install());
 });
 
-// Concatinate the contents of all .html-files in the templates
-// directories and save to www/templates.js.
+// extracting main bower files and concatenating them to vendor.js
 
-var templateCache = require('gulp-angular-templatecache');
+gulp.task("build-vendor-js", ['cleanup', 'install-bower-packages'], function () {
+    return gulp.src(mainBowerFiles(), { base: 'vendor' })
+        .pipe(filter(['**/*.js', '!vendor/jquery/**/*']))
+        .pipe(order([
+            'vendor/angular/angular.js',
+            'vendor/angular-resource/angular-resource.js',
+            'vendor/**/*.js'], { base: '.' }))
+        .pipe(concat('vendor.js', { newLine: ';\r\n\r\n' }))
+        .pipe(gulp.dest('js/'));
+});
 
-gulp.task('templateCache', function () {
+// copying fonts
+
+gulp.task('copy-bootstrap-resources', ['cleanup', 'install-bower-packages'], function () {
+    gulp.src('vendor/bootstrap/dist/fonts/*')
+        .pipe(gulp.dest('fonts/'));
+    
+    gulp.src('vendor/bootstrap/dist/css/bootstrap.css')
+        .pipe(gulp.dest('css/'));
+
+});
+
+// concatinating the contents of angular html templates and joining them to template cache
+
+gulp.task('build-template-cache', ['cleanup'], function () {
     return gulp.src(['client/**/*.html'])
         .pipe(order([], { base: '.' }))
         .pipe(templateCache({ root: '/client' }))
-        .pipe(gulp.dest('./build/'));
+        .pipe(gulp.dest('js/'));
 });
 
-// Copy fonts
+// concatenating client app scripts
 
-gulp.task('bootstrap-fonts', ['copy-bower-files'], function () {
-    return gulp.src(['./build/vendor/bootstrap/dist/fonts/*'])
-        .pipe(gulp.dest('./fonts/'));
-});
+gulp.task('build-client-js', ['cleanup'], function () {
 
-// inject scripts from ['client', 'vendor']
-
-gulp.task('inject', ['templateCache', 'copy-bower-files', 'bootstrap-fonts'], function () {
-
-    var vendorStream = gulp.src([
-            'build/vendor/**/*.js',
-            '!build/vendor/jquery/**/*'
-         ])
-        .pipe(order([
-            'build/vendor/angular/angular.js',
-            'build/vendor/angular-resource/angular-resource.js',
-            'build/vendor/**/*.js'], { base: '.' }))
-        .pipe(concat('vendor.js', { newLine: ';\r\n\r\n' }))
-        .pipe(gulp.dest('./js/'));
-		
     var clientStream = gulp.src(['client/**/*.js'])
         .pipe(order(['client/init/app.js', 'client/**/*.js'], { base: '.' }))
         .pipe(concat('client.js', { newLine: ';\r\n\r\n' }))
-//        .pipe(uglify())
-        .pipe(gulp.dest('./js/'));
+        //.pipe(uglify())
+        .pipe(gulp.dest('js/'));
+});
 
-    var templatesStream = gulp.src(['./build/templates.js'])
-        .pipe(gulp.dest('./js/'));
+// copying css resources
 
-    var cssStream = gulp.src(['./build/vendor/bootstrap/dist/css/bootstrap.css', './client/css/**/*.css'])
-        .pipe(gulp.dest('./css/'));
+gulp.task('copy-client-css-resources', ['cleanup'], function () {
 
-    gulp.src('./client/index.html')
+    var cssStream = gulp.src('client/css/**/*.css')
+        .pipe(gulp.dest('css/'));
+});
+
+// injecting resource references to starting index.html template and copying it to target location
+function buildStartUpHtml() {
+    var vendorStream = gulp.src('js/vendor.js');		
+    var clientStream = gulp.src('js/client.js');
+    var templatesStream = gulp.src('js/templates.js');
+    var cssStream = gulp.src('css/*.css');
+
+    gulp.src('client/index.html')
         .pipe(inject(cssStream, { name: 'styles', addRootSlash: false }))
         .pipe(inject(vendorStream, { name: 'vendor', addRootSlash: false }))
         .pipe(inject(clientStream, { name: 'client', addRootSlash: false }))
         .pipe(inject(templatesStream, { name: 'templates', addRootSlash: false }))
         .pipe(gulp.dest('./'));
+}
+
+gulp.task('build-startup-html', buildStartUpHtml);
+
+gulp.task('build-startup-html-with-dependencies', [
+    'build-vendor-js',
+    'build-client-js',
+    'build-template-cache',
+    'copy-client-css-resources',
+    'copy-bootstrap-resources'], buildStartUpHtml);
+
+// defining the default 'build all' task
+
+gulp.task('default', [
+    'cleanup',
+    'build-client-js',
+    'build-vendor-js',
+    'build-template-cache',
+    'copy-client-css-resources',
+    'copy-bootstrap-resources',
+    'build-startup-html-with-dependencies']);
+
+// defining monitoring task for ad-hoc building
+
+gulp.task('monitor', ['default'], function() {
+    skipCleanup = true;
+    gulp.watch('client/**/*.js', ['build-client-js']);
+    gulp.watch('client/**/*.css', ['copy-client-css-resources']);
+    gulp.watch(['client/**/*.html', '!client/index.html'], ['build-template-cache']);
+    gulp.watch('client/index.html', ['build-startup-html']);
 });
-
-// configuring default tasks sequence
-
-gulp.task('default', ['inject']);

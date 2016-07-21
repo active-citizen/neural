@@ -108,7 +108,6 @@
     <Content Include="client\service\network-service.js" />
     <Content Include="Global.asax" />
     <Content Include="index.html" />
-    <Content Include="npmPlaceholder.txt" />
     <Content Include="Web.config">
       <SubType>Designer</SubType>
     </Content>
